@@ -28,3 +28,5 @@ Activate the virtual environment:
 
 ```bash
 source .venv/bin/activate
+
+python pipeline.py your_video.mp4 --short
