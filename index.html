@@ -6,49 +6,100 @@
   <title>Robert Martinez | AI Developer</title>
 
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      background: #0d0d0d;
-      color: white;
       margin: 0;
-      padding: 0;
+      font-family: Arial, sans-serif;
+      background: #0b0b0b;
+      color: white;
+      line-height: 1.6;
     }
 
     .container {
-      max-width: 900px;
+      max-width: 950px;
       margin: auto;
       padding: 80px 30px;
     }
 
     h1 {
-      font-size: 55px;
-      margin-bottom: 10px;
+      font-size: 64px;
+      margin: 0;
     }
 
     h2 {
-      margin-top: 60px;
+      margin-top: 70px;
+      font-size: 30px;
+    }
+
+    h3 {
+      margin-top: 0;
     }
 
     p {
       color: #cfcfcf;
       font-size: 18px;
-      line-height: 1.6;
+    }
+
+    .intro {
+      max-width: 700px;
+      margin-top: 15px;
+    }
+
+    .buttons {
+      margin-top: 30px;
+    }
+
+    .button {
+      display: inline-block;
+      padding: 12px 20px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+      background: white;
+      color: black;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .button.secondary {
+      background: #1d1d1d;
+      color: white;
+      border: 1px solid #333;
     }
 
     .project {
-      margin-top: 25px;
-      padding: 25px;
+      background: #161616;
+      padding: 28px;
+      border-radius: 14px;
+      margin-top: 20px;
+    }
+
+    .skills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .skill {
       background: #181818;
-      border-radius: 12px;
+      border: 1px solid #2c2c2c;
+      padding: 8px 14px;
+      border-radius: 20px;
+      color: #d6d6d6;
+    }
+
+    footer {
+      margin-top: 80px;
+      color: #777;
+      font-size: 14px;
     }
 
     a {
-      color: #6ea8ff;
-      text-decoration: none;
-    }
-
-    a:hover {
-      text-decoration: underline;
+      color: #7ab0ff;
     }
   </style>
 </head>
@@ -59,29 +110,83 @@
 
     <h1>Robert Martinez</h1>
 
-    <p>
-      AI developer building tools that automate video editing
-      and content creation.
+    <p class="intro">
+      I build AI-powered tools that automate video editing and content creation.
+      My current focus is building systems that can intelligently transform
+      raw video into short-form content.
     </p>
 
-    <h2>Projects</h2>
+    <div class="buttons">
+      <a class="button" href="https://github.com/martinezr1695-lgtm">
+        GitHub
+      </a>
+
+      <a class="button secondary" href="mailto:martinezr1695@gmail.com">
+        Email Me
+      </a>
+    </div>
+
+
+    <h2>Featured Project</h2>
 
     <div class="project">
 
       <h3>AI Video Editor</h3>
 
       <p>
-        Python-based video editing system that uses FFmpeg
-        and computer vision to automate short-form video editing.
-        Features include face-tracked vertical cropping and
-        automated video processing.
+        An AI-powered video editing pipeline built with Python, FFmpeg,
+        speech transcription, and computer vision.
+      </p>
+
+      <p>
+        The system can remove silence, transcribe speech, track faces,
+        automatically reframe video into vertical 9:16 format,
+        and generate edited short-form content.
       </p>
 
       <a href="https://github.com/martinezr1695-lgtm/ai-video-editor">
-        View Project on GitHub →
+        View project on GitHub →
       </a>
 
     </div>
+
+
+    <h2>What I'm Building</h2>
+
+    <p>
+      I'm working toward an AI editing system that can analyze the editing
+      characteristics of reference videos and automatically apply similar
+      pacing, framing, captions, cuts, zooms, and other editing decisions
+      to new footage.
+    </p>
+
+
+    <h2>Skills & Tools</h2>
+
+    <div class="skills">
+      <div class="skill">Python</div>
+      <div class="skill">FFmpeg</div>
+      <div class="skill">OpenCV</div>
+      <div class="skill">Whisper</div>
+      <div class="skill">Git</div>
+      <div class="skill">GitHub</div>
+      <div class="skill">HTML</div>
+      <div class="skill">AI Automation</div>
+    </div>
+
+
+    <h2>About Me</h2>
+
+    <p>
+      I'm a developer focused on learning by building real AI products.
+      I'm especially interested in computer vision, video automation,
+      generative AI, and tools that make content creation faster.
+    </p>
+
+
+    <footer>
+      © 2026 Robert Martinez
+    </footer>
 
   </div>
 
