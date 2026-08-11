@@ -5,7 +5,6 @@ An AI-powered short-form video editing pipeline built with Python, Whisper, and 
 The project takes raw talking-head footage and automatically transforms it into vertical short-form content by removing silence, generating timed captions, and applying face-tracked 9:16 cropping.
 
 ## Demo
-
 ![AI Video Editor Demo](demo/demo_preview.gif)
 
 ## How It Works
@@ -15,6 +14,23 @@ The project takes raw talking-head footage and automatically transforms it into 
 3. OpenCV tracks the speaker and reframes the video to 9:16.
 4. Styled captions are generated and burned into the video.
 5. FFmpeg exports the finished short-form video.
+
+## Architecture
+
+```text
+Raw Video
+   ↓
+Silence Removal
+   ↓
+Whisper Transcription
+   ↓
+Face Tracking
+   ↓
+9:16 Reframing
+   ↓
+Caption Rendering
+   ↓
+Final Short
 
 
 ## Features
