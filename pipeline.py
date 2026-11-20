@@ -15,6 +15,7 @@ from avshort.captions import build_caption_groups
 from avshort.face_crop import render_captions_only, render_face_vertical
 from avshort.ffmpeg import center_crop_vertical, validate_video
 from avshort.silence import remove_silence
+from avshort.stabilize import stabilize_video
 
 
 def transcribe(video: Path, model_name: str = "base") -> list[dict]:
@@ -42,6 +43,14 @@ def run_pipeline(args: argparse.Namespace) -> Path:
     temp_files: list[Path] = []
 
     try:
+        if args.stabilize:
+            print("Stabilizing shaky footage...")
+            stabilized = Path(tempfile.mkstemp(suffix="_stabilized.mp4")[1])
+            temp_files.append(stabilized)
+            stabilize_video(working_video, stabilized)
+            working_video = stabilized
+            print("Stabilized.")
+
         if args.silence or args.short:
             print("Removing silence...")
             silenced = Path(tempfile.mkstemp(suffix="_no_silence.mp4")[1])
@@ -92,6 +101,11 @@ def run_pipeline(args: argparse.Namespace) -> Path:
             render_captions_only(working_video, output, caption_groups)
             return output
 
+        if args.stabilize and not args.silence:
+            output = Path(args.output).expanduser().resolve() if args.output else default_output(video, "stabilized")
+            output.write_bytes(working_video.read_bytes())
+            return output
+
         if args.silence:
             output = Path(args.output).expanduser().resolve() if args.output else default_output(video, "no_silence")
             if working_video == video:
@@ -131,6 +145,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Remove long silent sections with FFmpeg",
     )
     parser.add_argument(
+        "--stabilize",
+        action="store_true",
+        help="Stabilize shaky handheld/walking footage before other steps",
+    )
+    parser.add_argument(
         "--vertical",
         choices=("center", "face"),
         help="Crop to 9:16 — center crop or face-tracked crop",
@@ -165,7 +184,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    if not any((args.short, args.silence, args.vertical, args.captions)):
+    if not any((args.short, args.silence, args.vertical, args.captions, args.stabilize)):
         parser.print_help()
         print("\nTip: start with  python pipeline.py your_video.mp4 --short")
         return 1
