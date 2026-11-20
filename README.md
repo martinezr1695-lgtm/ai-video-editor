@@ -42,6 +42,7 @@ Final Short
 - Center-crop vertical mode
 - Retro VHS/CRT look (`--vhs`): scanlines, color fringing, grain, glow, vignette
 - "Then vs today" scrolling comparison wall (see below)
+- Glitch transitions between clips: whip blur, RGB split, torn slices, flash on the cut
 - Modular Python architecture
 - Command-line interface for running individual editing steps or the full pipeline
 
@@ -82,5 +83,13 @@ Render it, then optionally add the VHS look:
 ```bash
 python -m avshort.wall wall.json -o wall.mp4 --duration 10 --speed 120
 python pipeline.py wall.mp4 --vhs -o wall_vhs.mp4
+```
+
+## Glitch Transitions
+
+Join clips end to end with a glitch at every cut. Frames break apart as the cut approaches (whip blur, red/blue split, sideways-torn bands, corrupted blocks), flash on the cut, then recover. Clips of different sizes are cropped to match the first one, and each clip's audio stays in sync (silent clips get silence).
+
+```bash
+python -m avshort.transitions intro.mp4 broll.mp4 outro.mp4 -o joined.mp4 --length 0.4 --strength 1.0
 ```
 
