@@ -43,6 +43,7 @@ Final Short
 - Retro VHS/CRT look (`--vhs`): scanlines, color fringing, grain, glow, vignette
 - "Then vs today" scrolling comparison wall (see below)
 - Glitch transitions between clips: whip blur, RGB split, torn slices, flash on the cut
+- Slide/push transitions: the next clip shoves the last one off screen, with easing and motion blur
 - Modular Python architecture
 - Command-line interface for running individual editing steps or the full pipeline
 
@@ -91,5 +92,14 @@ Join clips end to end with a glitch at every cut. Frames break apart as the cut 
 
 ```bash
 python -m avshort.transitions intro.mp4 broll.mp4 outro.mp4 -o joined.mp4 --length 0.4 --strength 1.0
+```
+
+### Slide/Push
+
+The next clip slides in and shoves the current one off screen. The move eases in and out, with motion blur at top speed. Clips overlap during the push and their audio crossfades, so the result is shorter by one transition length per cut.
+
+```bash
+python -m avshort.transitions intro.mp4 broll.mp4 outro.mp4 --style push -o joined.mp4
+python -m avshort.transitions a.mp4 b.mp4 --style push --direction up --length 0.6
 ```
 

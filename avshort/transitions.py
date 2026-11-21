@@ -1,4 +1,4 @@
-"""Glitch transitions between clips.
+"""Transitions between clips: glitch and slide/push.
 
 Joins clips end to end. Around every cut, frames get progressively
 "broken" and then recover, peaking exactly on the cut:
@@ -8,6 +8,10 @@ Joins clips end to end. Around every cut, frames get progressively
   - slice displacement: horizontal bands torn sideways
   - block corruption: chunks of the picture copied to the wrong place
   - flash: a brightness pop on the cut frame itself
+
+Push: the next clip slides in and shoves the current one off screen,
+with an ease-in-out move and motion blur at top speed. The clips
+overlap during the move and their audio crossfades.
 """
 
 from __future__ import annotations
@@ -173,8 +177,14 @@ def glitch_join(
     video_only.unlink(missing_ok=True)
 
 
-def _join_audio(clips: list[Path], counts: list[int], fps: float, video_only: Path, output: Path) -> None:
-    """Concatenate each clip's audio (silence for clips without any) and attach it."""
+def _join_audio(
+    clips: list[Path], counts: list[int], fps: float, video_only: Path, output: Path, overlap_frames: int = 0
+) -> None:
+    """Join each clip's audio (silence for clips without any) and attach it.
+
+    With overlap_frames > 0 the clips overlap at each cut, so their audio
+    crossfades over the same stretch to stay in sync with the picture.
+    """
     inputs = ["-i", str(video_only)]
     input_number = 0
     labels = []
@@ -194,7 +204,16 @@ def _join_audio(clips: list[Path], counts: list[int], fps: float, video_only: Pa
         )
         labels.append(f"[a{number}]")
 
-    graph = ";".join(filters) + f";{''.join(labels)}concat=n={len(labels)}:v=0:a=1[aout]"
+    if overlap_frames > 0:
+        fade = overlap_frames / fps
+        chain = labels[0]
+        for number, label in enumerate(labels[1:], start=1):
+            out_label = "[aout]" if number == len(labels) - 1 else f"[x{number}]"
+            filters.append(f"{chain}{label}acrossfade=d={fade:.3f}:c1=tri:c2=tri{out_label}")
+            chain = out_label
+        graph = ";".join(filters)
+    else:
+        graph = ";".join(filters) + f";{''.join(labels)}concat=n={len(labels)}:v=0:a=1[aout]"
     command = ["ffmpeg", "-y", "-loglevel", "error", *inputs, "-filter_complex", graph,
                "-map", "0:v", "-map", "[aout]", "-c:v", "copy", "-c:a", "aac", "-shortest", str(output)]
 
@@ -203,15 +222,133 @@ def _join_audio(clips: list[Path], counts: list[int], fps: float, video_only: Pa
         raise RuntimeError(f"FFmpeg could not join the audio.\n{finished.stderr.strip()}")
 
 
+def _ease_in_out(t: float) -> float:
+    """Cubic ease: slow start, fast middle, slow finish."""
+    return 4 * t**3 if t < 0.5 else 1 - (-2 * t + 2) ** 3 / 2
+
+
+def push_frame(old: np.ndarray, new: np.ndarray, progress: float, direction: str = "left") -> np.ndarray:
+    """New clip shoves the old one off screen. progress 0 = all old, 1 = all new."""
+    height, width = old.shape[:2]
+    eased = _ease_in_out(progress)
+    # Speed of the move right now (slope of the ease curve), used for motion blur.
+    step = 0.02
+    speed = abs(_ease_in_out(min(1, progress + step)) - _ease_in_out(max(0, progress - step))) / (2 * step)
+
+    horizontal = direction in ("left", "right")
+    size = width if horizontal else height
+    offset = int(round(eased * size))
+
+    # Lay both frames side by side (or stacked) and take a window that slides across them.
+    if direction == "left":
+        strip, start = np.hstack([old, new]), offset
+    elif direction == "right":
+        strip, start = np.hstack([new, old]), size - offset
+    elif direction == "up":
+        strip, start = np.vstack([old, new]), offset
+    elif direction == "down":
+        strip, start = np.vstack([new, old]), size - offset
+    else:
+        raise ValueError("direction must be left, right, up or down")
+
+    frame = strip[:, start : start + width] if horizontal else strip[start : start + height]
+
+    # Motion blur along the direction of travel, strongest at top speed.
+    length = int(0.035 * size * speed)
+    if length > 2:
+        kernel = np.full((1, length) if horizontal else (length, 1), 1.0 / length, np.float32)
+        frame = cv2.filter2D(frame, -1, kernel)
+
+    return np.ascontiguousarray(frame)
+
+
+def push_join(
+    clips: list[Path],
+    output: Path,
+    transition_seconds: float = 0.5,
+    direction: str = "left",
+) -> None:
+    """Join clips with a slide/push at every cut. The clips overlap for transition_seconds."""
+    if len(clips) < 2:
+        raise ValueError("Give at least two clips to join.")
+
+    first = cv2.VideoCapture(str(clips[0]))
+    width = int(first.get(cv2.CAP_PROP_FRAME_WIDTH)) // 2 * 2
+    height = int(first.get(cv2.CAP_PROP_FRAME_HEIGHT)) // 2 * 2
+    first.release()
+
+    counts, fps = _frame_counts(clips)
+    # The overlap can't be longer than a third of the shortest clip.
+    overlap = max(1, min(int(transition_seconds * fps), min(counts) // 3))
+
+    video_only = output.with_name(f"{output.stem}_push_frames.mp4")
+    encoder = subprocess.Popen(
+        [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{width}x{height}", "-r", str(fps), "-i", "-",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+            str(video_only),
+        ],
+        stdin=subprocess.PIPE,
+    )
+
+    held: list[np.ndarray] = []  # last frames of the previous clip, waiting to be pushed out
+    try:
+        for clip_number, (clip, count) in enumerate(zip(clips, counts)):
+            is_last = clip_number == len(clips) - 1
+            capture = cv2.VideoCapture(str(clip))
+            frames_read = 0
+            tail: list[np.ndarray] = []
+            while True:
+                success, frame = capture.read()
+                if not success:
+                    break
+                frame = _fit(frame, width, height)
+
+                if frames_read < len(held):
+                    # Transition: this clip's opening frames push the held frames out.
+                    progress = (frames_read + 1) / (len(held) + 1)
+                    frame_out = push_frame(held[frames_read], frame, progress, direction)
+                elif not is_last and frames_read >= count - overlap:
+                    # Hold the ending frames for the next transition.
+                    tail.append(frame)
+                    frames_read += 1
+                    continue
+                else:
+                    frame_out = frame
+
+                encoder.stdin.write(frame_out.tobytes())
+                frames_read += 1
+            capture.release()
+            held = tail
+    finally:
+        encoder.stdin.close()
+        encoder.wait()
+
+    if encoder.returncode != 0:
+        raise RuntimeError("FFmpeg could not encode the joined video.")
+
+    _join_audio(clips, counts, fps, video_only, output, overlap_frames=overlap)
+    video_only.unlink(missing_ok=True)
+
+
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Join clips with glitch transitions.")
+    parser = argparse.ArgumentParser(description="Join clips with glitch or slide/push transitions.")
     parser.add_argument("clips", nargs="+", help="Two or more video files, in order")
-    parser.add_argument("-o", "--output", default="glitch_joined.mp4")
-    parser.add_argument("--length", type=float, default=0.4, help="Transition length in seconds (default 0.4)")
-    parser.add_argument("--strength", type=float, default=1.0, help="0.5 = subtle, 1.0 = full (default)")
+    parser.add_argument("-o", "--output", default="joined.mp4")
+    parser.add_argument("--style", choices=("glitch", "push"), default="glitch", help="Transition type (default glitch)")
+    parser.add_argument("--length", type=float, default=None,
+                        help="Transition length in seconds (default 0.4 glitch, 0.5 push)")
+    parser.add_argument("--strength", type=float, default=1.0, help="Glitch only: 0.5 = subtle, 1.0 = full (default)")
+    parser.add_argument("--direction", choices=("left", "right", "up", "down"), default="left",
+                        help="Push only: which way the old clip leaves (default left)")
     args = parser.parse_args()
 
-    glitch_join([Path(c) for c in args.clips], Path(args.output), args.length, args.strength)
+    clip_paths = [Path(c) for c in args.clips]
+    if args.style == "push":
+        push_join(clip_paths, Path(args.output), args.length or 0.5, args.direction)
+    else:
+        glitch_join(clip_paths, Path(args.output), args.length or 0.4, args.strength)
     print(f"Finished: {args.output}")
