@@ -16,6 +16,7 @@ from avshort.face_crop import render_captions_only, render_face_vertical
 from avshort.ffmpeg import center_crop_vertical, validate_video
 from avshort.silence import remove_silence
 from avshort.stabilize import stabilize_video
+from avshort.vhs import apply_vhs
 
 
 def transcribe(video: Path, model_name: str = "base") -> list[dict]:
@@ -150,6 +151,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Stabilize shaky handheld/walking footage before other steps",
     )
     parser.add_argument(
+        "--vhs",
+        action="store_true",
+        help="Finish with a retro VHS/CRT look (scanlines, color fringing, grain, glow)",
+    )
+    parser.add_argument(
         "--vertical",
         choices=("center", "face"),
         help="Crop to 9:16 — center crop or face-tracked crop",
@@ -184,13 +190,26 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    if not any((args.short, args.silence, args.vertical, args.captions, args.stabilize)):
+    other_steps = any((args.short, args.silence, args.vertical, args.captions, args.stabilize))
+
+    if not other_steps and not args.vhs:
         parser.print_help()
         print("\nTip: start with  python pipeline.py your_video.mp4 --short")
         return 1
 
     try:
-        output = run_pipeline(args)
+        output = run_pipeline(args) if other_steps else None
+
+        if args.vhs:
+            print("Applying VHS look...")
+            if output is None:
+                source = validate_video(Path(args.input).expanduser().resolve())
+                output = Path(args.output).expanduser().resolve() if args.output else default_output(source, "vhs")
+                apply_vhs(source, output)
+            else:
+                styled = output.with_name(f"{output.stem}_vhs_tmp.mp4")
+                apply_vhs(output, styled)
+                styled.replace(output)
     except (FileNotFoundError, ValueError, RuntimeError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
